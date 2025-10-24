@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Magic Watch Series 1",
+    "price": "$299",
+    "image": "/watch1.jpg"
+  },
+  {
+    "id": 2,
+    "name": "Magic Watch Series 2",
+    "price": "$349",
+    "image": "/watch2.jpg"
+  },
+  {
+    "id": 3,
+    "name": "Magic Watch Pro",
+    "price": "$399",
+    "image": "/watch3.jpg"
+  }
+]
