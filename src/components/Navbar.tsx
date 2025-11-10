@@ -3,17 +3,38 @@
 import Link from "next/link";
 import Container from "@/components/Container";
 import { Search, ShoppingCart, User, Heart } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/store/cart";
+import Cookies from "js-cookie";
 
 export default function Navbar() {
   const [q, setQ] = useState("");
   const router = useRouter();
-
-  // lấy tổng số lượng từ store (động)
   const totalQty = useCart((s) => s.totalQty());
+  const [role, setRole] = useState<string | null>(null);
 
+  // 🧠 Kiểm tra role & token khi component mount
+  useEffect(() => {
+    const userRole = localStorage.getItem("role");
+    const token = Cookies.get("token");
+    if (token) {
+      setRole(userRole || "user");
+    } else {
+      setRole(null);
+    }
+  }, []);
+
+  // 🧩 Khi đăng xuất
+  const handleLogout = () => {
+    Cookies.remove("token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    alert("👋 Bạn đã đăng xuất!");
+    router.push("/auth");
+  };
+
+  // 🔍 Tìm kiếm sản phẩm
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const keyword = q.trim();
@@ -23,15 +44,32 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur">
       <Container className="flex h-16 items-center justify-between gap-4">
-        {/* Logo + main nav */}
+        {/* Logo + menu chính */}
         <div className="flex items-center gap-6">
           <Link href="/" className="text-xl font-black tracking-tight">
             Magic<span className="text-[hsl(var(--mw-accent))]">Watches</span>
           </Link>
+
           <nav className="hidden items-center gap-5 text-sm text-gray-700 md:flex">
-            <Link className="hover:text-black" href="/products">Sản phẩm</Link>
-            <Link className="hover:text-black" href="/new">Tin Tức</Link>
-            <Link className="hover:text-black" href="/about">Giới Thiệu</Link>
+            <Link className="hover:text-black" href="/products">
+              Sản phẩm
+            </Link>
+            <Link className="hover:text-black" href="/new">
+              Tin Tức
+            </Link>
+            <Link className="hover:text-black" href="/about">
+              Giới Thiệu
+            </Link>
+
+            {/* 🧩 Hiện link admin nếu role = admin */}
+            {role === "admin" && (
+              <Link
+                href="/admin"
+                className="font-semibold text-red-600 hover:text-red-700"
+              >
+                Trang quản trị
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -49,14 +87,31 @@ export default function Navbar() {
             </div>
           </form>
 
-          <Link href="/wishlist" className="hidden rounded-xl p-2 hover:bg-gray-100 sm:inline-flex">
+          <Link
+            href="/wishlist"
+            className="hidden rounded-xl p-2 hover:bg-gray-100 sm:inline-flex"
+          >
             <Heart className="h-5 w-5" />
           </Link>
-          <Link href="/auth" className="rounded-xl p-2 hover:bg-gray-100">
-            <User className="h-5 w-5" />
-          </Link>
 
-          <Link href="/cart" className="relative rounded-xl p-2 hover:bg-gray-100">
+          {/* 👤 Nút đăng nhập / đăng xuất */}
+          {!role ? (
+            <Link href="/auth" className="rounded-xl p-2 hover:bg-gray-100">
+              <User className="h-5 w-5" />
+            </Link>
+          ) : (
+            <button
+              onClick={handleLogout}
+              className="rounded-xl px-3 py-1 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Đăng xuất
+            </button>
+          )}
+
+          <Link
+            href="/cart"
+            className="relative rounded-xl p-2 hover:bg-gray-100"
+          >
             <ShoppingCart className="h-5 w-5" />
             {totalQty > 0 && (
               <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">

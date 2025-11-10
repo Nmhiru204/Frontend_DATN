@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
+import Cookies from "js-cookie";
 import Container from "@/components/Container";
 
 type Tab = "login" | "register";
 
 export default function AuthPage() {
   const [tab, setTab] = useState<Tab>("login");
+
+  // ✅ Nếu đã có token → tự động rời khỏi trang auth
+  useEffect(() => {
+    const token = Cookies.get("token");
+    if (token) window.location.href = "/";
+  }, []);
 
   return (
     <Container className="py-12">
@@ -32,13 +38,13 @@ export default function AuthPage() {
           </button>
         </div>
 
-        {/* Forms */}
         {tab === "login" ? <LoginForm /> : <RegisterForm />}
       </div>
     </Container>
   );
 }
 
+/* ---------------- LOGIN FORM ---------------- */
 function LoginForm() {
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +57,7 @@ function LoginForm() {
     const password = formData.get("password") as string;
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("http://localhost:5000/api/users/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -59,16 +65,21 @@ function LoginForm() {
 
       const data = await res.json();
 
-      if (res.ok) {
+      if (res.ok && data.token) {
+        // ✅ Lưu token vào cookie để middleware đọc được
+        Cookies.set("token", data.token, {
+          expires: 7, // 7 ngày
+          path: "/",
+        });
+
         alert("🎉 Đăng nhập thành công!");
-        console.log("Token:", data.token);
-        // ví dụ: chuyển hướng tới trang chủ
-        window.location.href = "/";
+        window.location.href = data.role === "admin" ? "/admin" : "/";
       } else {
         alert(data.message || "❌ Sai email hoặc mật khẩu!");
       }
     } catch (err) {
-      alert("⚠️ Lỗi kết nối server!");
+      console.error("Lỗi đăng nhập:", err);
+      alert("⚠️ Không thể kết nối tới server!");
     } finally {
       setLoading(false);
     }
@@ -107,6 +118,7 @@ function LoginForm() {
   );
 }
 
+/* ---------------- REGISTER FORM ---------------- */
 function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
@@ -121,24 +133,23 @@ function RegisterForm() {
     const password = formData.get("password") as string;
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("http://localhost:5000/api/users/register", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, email, password }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        alert(`🎉 Tạo tài khoản thành công!`);
-const buttons = document.querySelectorAll("button[role='tabs'], .grid > button");
-(buttons?.[0] as HTMLButtonElement | undefined)?.click?.(); // click vào tab "Đăng nhập"
-
+        alert("🎉 Tạo tài khoản thành công! Hãy đăng nhập ngay.");
+        window.location.reload();
       } else {
         alert(data.message || "❌ Chưa tạo tài khoản thành công!");
       }
     } catch (err) {
       console.error("Lỗi đăng ký:", err);
-      alert("⚠️ Có lỗi xảy ra, vui lòng thử lại sau!");
+      alert("⚠️ Không thể kết nối tới server!");
     } finally {
       setLoading(false);
     }
@@ -199,12 +210,10 @@ const buttons = document.querySelectorAll("button[role='tabs'], .grid > button")
       <p className="mt-2 text-center text-sm text-gray-600">
         Đã có tài khoản?{" "}
         <a
-          id="switch-to-register"
-          href="#login"
+          href="#"
           onClick={(e) => {
             e.preventDefault();
-            const buttons = document.querySelectorAll("button[role='tab'], .grid > button");
-            (buttons?.[0] as HTMLButtonElement | undefined)?.click?.();
+            window.location.reload();
           }}
           className="font-medium text-black hover:underline"
         >
@@ -214,4 +223,3 @@ const buttons = document.querySelectorAll("button[role='tabs'], .grid > button")
     </form>
   );
 }
-
