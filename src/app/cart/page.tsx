@@ -3,6 +3,9 @@
 import Container from "@/components/Container";
 import Image from "next/image";
 import { useCart } from "@/store/cart";
+import { useState } from "react";
+import PaymentMethod from "./PaymentMethod";
+import Cookies from "js-cookie";
 
 export default function CartPage() {
   const { items, inc, dec, remove, totalPrice, totalQty, clear } = {
@@ -15,6 +18,71 @@ export default function CartPage() {
     clear: useCart((s) => s.clear),
   };
 
+  const orderProducts = items.map(item => ({
+    idProduct: item.id,     // FE gửi "id", backend cần "idproduct"
+    name: item.name,
+    price: item.price * item.qty,
+    quantity: item.qty
+  }));
+
+  const [paymentmethod, setPaymentMethod] = useState<"cod" | "online">("cod");
+  const [address, setAddress] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (items.length === 0) {
+      alert("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
+      return;
+    }
+
+    const res = await fetch("http://localhost:5000/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "authorization": `Bearer ${Cookies.get("token")}`,
+      },
+      body: JSON.stringify({
+        products: orderProducts,
+        TotalPrice: totalPrice(),
+        paymentMethod: paymentmethod,
+        address: address,
+        status: paymentmethod === "cod" ? "pending" : "confirmed"
+      }),
+    });
+
+    if (!res.ok) {
+      alert("Tạo đơn hàng thất bại");
+      return;
+    }
+
+    const order = await res.json(); // đây là order vừa tạo
+    console.log("Order vừa tạo:", order);
+
+    clear(); // xóa giỏ hàng
+
+    if (paymentmethod === "cod") {
+      window.location.href = "http://localhost:3000";
+      return;
+    }
+
+    if (paymentmethod === 'online') {
+      const stripeRes = await fetch("http://localhost:5000/api/stripe/create-checkout-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: order.data._id,
+          cart: order.data.products
+          }),
+      });
+      const stripeData = await stripeRes.json()
+      console.log(stripeData)
+      window.location.href = stripeData.url
+    }
+
+
+
+
+  }
   return (
     <Container className="py-10">
       <div className="grid gap-8 lg:grid-cols-3">
@@ -97,9 +165,11 @@ export default function CartPage() {
             </div>
           </div>
 
-          <button className="mt-4 w-full rounded-lg bg-black px-4 py-2 font-semibold text-white hover:opacity-90 transition">
+          <PaymentMethod value={paymentmethod} address={address} onAddressChange={setAddress} onChange={setPaymentMethod} />
+          <button onClick={handleSubmit} type="submit" className="mt-4 w-full rounded-lg bg-black px-4 py-2 font-semibold text-white hover:opacity-90 transition">
             Đặt hàng
           </button>
+
           {items.length > 0 && (
             <button
               className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 transition"

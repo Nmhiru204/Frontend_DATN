@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import ClientLayout from "@/components/clientLayout";
 
 export const metadata: Metadata = {
   title: "MagicWatches – Đồng hồ chính hãng",
@@ -15,11 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      {/* ⚡ suppressHydrationWarning tránh mismatch khi load extension */}
+      {/* tránh hydration mismatch */}
       <body suppressHydrationWarning>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

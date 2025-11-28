@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 export default function ForbiddenPage() {
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100">

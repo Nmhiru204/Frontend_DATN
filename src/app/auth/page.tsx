@@ -2,37 +2,51 @@
 
 import { useState, useEffect } from "react";
 import Cookies from "js-cookie";
-import Container from "@/components/Container";
 
 type Tab = "login" | "register";
 
 export default function AuthPage() {
   const [tab, setTab] = useState<Tab>("login");
 
-  // ✅ Nếu đã có token → tự động rời khỏi trang auth
   useEffect(() => {
     const token = Cookies.get("token");
     if (token) window.location.href = "/";
   }, []);
 
   return (
-    <Container className="py-12">
-      <div className="mx-auto w-full max-w-md card p-6">
+    <div className="py-14">
+      <div
+        className="
+          w-full max-w-md mx-auto 
+          backdrop-blur-xl bg-white/60 
+          border border-white/40 
+          shadow-xl rounded-3xl 
+          p-8
+        "
+      >
         {/* Tabs */}
-        <div className="mb-6 grid grid-cols-2 rounded-2xl bg-gray-100 p-1 text-sm">
+        <div className="mb-8 flex bg-gray-100 rounded-2xl p-1">
           <button
             onClick={() => setTab("login")}
-            className={`rounded-xl px-4 py-2 font-medium ${
-              tab === "login" ? "bg-white shadow" : "text-gray-600"
-            }`}
+            className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all 
+              ${
+                tab === "login"
+                  ? "bg-white shadow-md text-gray-900"
+                  : "text-gray-500"
+              }
+            `}
           >
             Đăng nhập
           </button>
           <button
             onClick={() => setTab("register")}
-            className={`rounded-xl px-4 py-2 font-medium ${
-              tab === "register" ? "bg-white shadow" : "text-gray-600"
-            }`}
+            className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all 
+              ${
+                tab === "register"
+                  ? "bg-white shadow-md text-gray-900"
+                  : "text-gray-500"
+              }
+            `}
           >
             Đăng ký
           </button>
@@ -40,11 +54,13 @@ export default function AuthPage() {
 
         {tab === "login" ? <LoginForm /> : <RegisterForm />}
       </div>
-    </Container>
+    </div>
   );
 }
 
-/* ---------------- LOGIN FORM ---------------- */
+/* ======================================================
+   🟢 LOGIN FORM — đã sửa đầy đủ
+====================================================== */
 function LoginForm() {
   const [loading, setLoading] = useState(false);
 
@@ -66,19 +82,24 @@ function LoginForm() {
       const data = await res.json();
 
       if (res.ok && data.token) {
-        // ✅ Lưu token vào cookie để middleware đọc được
-        Cookies.set("token", data.token, {
-          expires: 7, // 7 ngày
-          path: "/",
-        });
+        // 🟢 LƯU TOKEN CHUẨN — FIX HOÀN TOÀN JWT MALFORMED
+        Cookies.set("token", data.token, { expires: 7, path: "/" });
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.role);
+        localStorage.setItem("email", data.user?.email ?? "");
 
         alert("🎉 Đăng nhập thành công!");
-        window.location.href = data.role === "admin" ? "/admin" : "/";
+
+        // 🔥 Điều hướng admin chính xác
+        if (data.role === "admin") {
+          window.location.href = "/admin";
+        } else {
+          window.location.href = "/";
+        }
       } else {
         alert(data.message || "❌ Sai email hoặc mật khẩu!");
       }
-    } catch (err) {
-      console.error("Lỗi đăng nhập:", err);
+    } catch {
       alert("⚠️ Không thể kết nối tới server!");
     } finally {
       setLoading(false);
@@ -86,29 +107,47 @@ function LoginForm() {
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form className="space-y-5" onSubmit={handleSubmit}>
       <div>
         <label className="mb-1 block text-sm font-medium">Email</label>
         <input
           type="email"
           name="email"
           required
-          className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+          className="
+            w-full rounded-xl border border-gray-300 
+            px-4 py-3 bg-white/80
+            focus:ring-2 focus:ring-black focus:border-black
+            transition-all outline-none
+          "
           placeholder="you@example.com"
         />
       </div>
+
       <div>
         <label className="mb-1 block text-sm font-medium">Mật khẩu</label>
         <input
           type="password"
           name="password"
           required
-          className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+          className="
+            w-full rounded-xl border border-gray-300 
+            px-4 py-3 bg-white/80
+            focus:ring-2 focus:ring-black focus:border-black
+            transition-all outline-none
+          "
           placeholder="••••••••"
         />
       </div>
+
       <button
-        className="btn-primary w-full disabled:opacity-50"
+        className="
+          w-full py-3 rounded-xl font-medium 
+          bg-black text-white 
+          hover:bg-gray-800
+          transition-all shadow-md 
+          disabled:opacity-50
+        "
         type="submit"
         disabled={loading}
       >
@@ -118,7 +157,9 @@ function LoginForm() {
   );
 }
 
-/* ---------------- REGISTER FORM ---------------- */
+/* ======================================================
+   🟣 REGISTER FORM — giữ nguyên nhưng chuẩn hoá
+====================================================== */
 function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
@@ -147,8 +188,7 @@ function RegisterForm() {
       } else {
         alert(data.message || "❌ Chưa tạo tài khoản thành công!");
       }
-    } catch (err) {
-      console.error("Lỗi đăng ký:", err);
+    } catch {
       alert("⚠️ Không thể kết nối tới server!");
     } finally {
       setLoading(false);
@@ -156,22 +196,33 @@ function RegisterForm() {
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form className="space-y-5" onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium">Họ</label>
           <input
             name="firstName"
             required
-            className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+            className="
+              w-full rounded-xl border border-gray-300 
+              px-4 py-3 bg-white/80
+              focus:ring-2 focus:ring-black focus:border-black
+              outline-none transition-all
+            "
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm font-medium">Tên</label>
           <input
             name="lastName"
             required
-            className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+            className="
+              w-full rounded-xl border border-gray-300 
+              px-4 py-3 bg-white/80
+              focus:ring-2 focus:ring-black focus:border-black
+              outline-none transition-all
+            "
           />
         </div>
       </div>
@@ -182,7 +233,12 @@ function RegisterForm() {
           type="email"
           name="email"
           required
-          className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+          className="
+            w-full rounded-xl border border-gray-300 
+            px-4 py-3 bg-white/80
+            focus:ring-2 focus:ring-black focus:border-black
+            outline-none transition-all
+          "
           placeholder="you@example.com"
         />
       </div>
@@ -194,7 +250,12 @@ function RegisterForm() {
           name="password"
           minLength={6}
           required
-          className="w-full rounded-2xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-gray-200"
+          className="
+            w-full rounded-xl border border-gray-300 
+            px-4 py-3 bg-white/80
+            focus:ring-2 focus:ring-black focus:border-black
+            outline-none transition-all
+          "
           placeholder="Tối thiểu 6 ký tự"
         />
       </div>
@@ -202,23 +263,25 @@ function RegisterForm() {
       <button
         type="submit"
         disabled={loading}
-        className="btn-primary w-full disabled:opacity-50"
+        className="
+          w-full py-3 rounded-xl font-medium 
+          bg-black text-white 
+          hover:bg-gray-800
+          transition-all shadow-md 
+          disabled:opacity-50
+        "
       >
         {loading ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
       </button>
 
-      <p className="mt-2 text-center text-sm text-gray-600">
+      <p className="text-center text-sm text-gray-600">
         Đã có tài khoản?{" "}
-        <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.reload();
-          }}
-          className="font-medium text-black hover:underline"
+        <span
+          onClick={() => window.location.reload()}
+          className="font-medium text-black hover:underline cursor-pointer"
         >
           Đăng nhập
-        </a>
+        </span>
       </p>
     </form>
   );

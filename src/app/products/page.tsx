@@ -11,6 +11,7 @@ import { useCart } from "@/store/cart"   // ✅ dùng store giỏ hàng
 type ApiBrand = { _id: string; TenTH: string }
 type ApiCategory = { _id: string; TenLoai: string }
 type ApiProduct = {
+  [x: string]: any
   _id: string
   TenDH: string
   Gia: number
@@ -179,13 +180,39 @@ export default function ProductsPage() {
   // ===== Lọc / sắp xếp =====
   const filteredProducts = useMemo(() => {
     let list = [...allProducts]
-    if (selectedCategory !== "all") list = list.filter((p) => p.category === selectedCategory)
+
+    // 🔥 1) ẨN SẢN PHẨM BỊ ADMIN ẨN
+    list = list.filter((p) => !p.raw?.isHidden)
+
+    // 🔥 2) ẨN TẤT CẢ SẢN PHẨM THUỘC DANH MỤC BỊ ẨN
+    const hiddenCats = allCategories
+      .filter((c: any) => c.isHidden)
+      .map((c: any) => c.TenLoai)
+
+    list = list.filter((p) => !hiddenCats.includes(p.category || ""))
+
+    // === GIỮ NGUYÊN LOGIC GỐC CỦA ANH ===
+
+    // Lọc theo danh mục đang chọn
+    if (selectedCategory !== "all") {
+      list = list.filter((p) => p.category === selectedCategory)
+    }
+
+    // Lọc theo giá
     const price = PRICE_RANGES.find((r) => r.id === selectedPriceRange)
-    if (price) list = list.filter((p) => p.price >= price.min && p.price <= price.max)
-    if (sortBy === "price-low") list.sort((a, b) => a.price - b.price)
-    else if (sortBy === "price-high") list.sort((a, b) => b.price - a.price)
+    if (price) {
+      list = list.filter((p) => p.price >= price.min && p.price <= price.max)
+    }
+
+    // Sort theo giá
+    if (sortBy === "price-low") {
+      list.sort((a, b) => a.price - b.price)
+    } else if (sortBy === "price-high") {
+      list.sort((a, b) => b.price - a.price)
+    }
+
     return list
-  }, [allProducts, selectedCategory, selectedPriceRange, sortBy])
+  }, [allProducts, allCategories, selectedCategory, selectedPriceRange, sortBy])
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
   const start = (currentPage - 1) * ITEMS_PER_PAGE
@@ -315,11 +342,10 @@ export default function ProductsPage() {
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    currentPage === page
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${currentPage === page
                       ? "bg-blue-600 text-white shadow"
                       : "border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   {page}
                 </button>

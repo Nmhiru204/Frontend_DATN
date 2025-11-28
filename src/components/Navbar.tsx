@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import Link from "next/link";
 import Container from "@/components/Container";
-import { Search, ShoppingCart, User, Heart } from "lucide-react";
+import { Search, ShoppingCart, User, Heart, Menu, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/store/cart";
@@ -12,29 +13,36 @@ export default function Navbar() {
   const [q, setQ] = useState("");
   const router = useRouter();
   const totalQty = useCart((s) => s.totalQty());
-  const [role, setRole] = useState<string | null>(null);
 
-  // 🧠 Kiểm tra role & token khi component mount
+  const [user, setUser] = useState<any>(null); // ⭐ chứa thông tin user
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // ⭐ Fetch user info
   useEffect(() => {
-    const userRole = localStorage.getItem("role");
     const token = Cookies.get("token");
-    if (token) {
-      setRole(userRole || "user");
-    } else {
-      setRole(null);
-    }
+    if (!token) return;
+
+    fetch("http://localhost:5000/api/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setUser(data.data);
+        }
+      })
+      .catch(() => setUser(null));
   }, []);
 
-  // 🧩 Khi đăng xuất
+  // Logout
   const handleLogout = () => {
     Cookies.remove("token");
-    localStorage.removeItem("token");
     localStorage.removeItem("role");
     alert("👋 Bạn đã đăng xuất!");
     router.push("/auth");
   };
 
-  // 🔍 Tìm kiếm sản phẩm
+  // Search
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const keyword = q.trim();
@@ -42,83 +50,106 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur">
-      <Container className="flex h-16 items-center justify-between gap-4">
-        {/* Logo + menu chính */}
-        <div className="flex items-center gap-6">
-          <Link href="/" className="text-xl font-black tracking-tight">
-            Magic<span className="text-[hsl(var(--mw-accent))]">Watches</span>
+    <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-gray-200 shadow-sm">
+      <Container className="flex h-20 items-center justify-between gap-6">
+
+        {/* LEFT — Logo + Menu */}
+        <div className="flex items-center gap-10">
+          <Link href="/" className="text-2xl font-black tracking-tight flex items-center">
+            Magic <span className="ml-1 text-[#f97316]">Watches</span>
           </Link>
 
-          <nav className="hidden items-center gap-5 text-sm text-gray-700 md:flex">
-            <Link className="hover:text-black" href="/products">
-              Sản phẩm
-            </Link>
-            <Link className="hover:text-black" href="/new">
-              Tin Tức
-            </Link>
-            <Link className="hover:text-black" href="/about">
-              Giới Thiệu
-            </Link>
+          <nav className="hidden md:flex items-center gap-6 text-[15px] font-medium text-gray-700">
+            <Link className="hover:text-black transition" href="/products">Sản phẩm</Link>
+            <Link className="hover:text-black transition" href="/new">Tin Tức</Link>
+            <Link className="hover:text-black transition" href="/about">Giới Thiệu</Link>
 
-            {/* 🧩 Hiện link admin nếu role = admin */}
-            {role === "admin" && (
-              <Link
-                href="/admin"
-                className="font-semibold text-red-600 hover:text-red-700"
-              >
+            {user?.role === "admin" && (
+              <Link href="/admin" className="font-semibold text-[#f97316] hover:text-[#ea580c]">
                 Trang quản trị
               </Link>
             )}
           </nav>
         </div>
 
-        {/* Search + actions */}
-        <div className="flex items-center gap-3">
+        {/* RIGHT */}
+        <div className="flex items-center gap-4">
+
+          {/* Search */}
           <form onSubmit={onSubmit} className="hidden md:block">
             <div className="relative">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Tìm đồng hồ..."
-                className="w-80 rounded-2xl border border-gray-300 bg-white px-4 py-2 pl-10 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                className="w-80 rounded-2xl border border-gray-300 bg-white px-4 py-2.5 pl-11 text-sm focus:border-black focus:ring-2 focus:ring-black/10"
               />
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
             </div>
           </form>
 
-          <Link
-            href="/wishlist"
-            className="hidden rounded-xl p-2 hover:bg-gray-100 sm:inline-flex"
-          >
-            <Heart className="h-5 w-5" />
+          {/* Wishlist */}
+          <Link href="/wishlist" className="hidden sm:flex p-2 rounded-xl hover:bg-gray-100">
+            <Heart className="h-5 w-5 text-gray-800" />
           </Link>
 
-          {/* 👤 Nút đăng nhập / đăng xuất */}
-          {!role ? (
-            <Link href="/auth" className="rounded-xl p-2 hover:bg-gray-100">
-              <User className="h-5 w-5" />
+          {/* USER MENU */}
+          {!user ? (
+            <Link href="/auth" className="p-2 rounded-xl hover:bg-gray-100 transition">
+              <User className="h-5 w-5 text-gray-800" />
             </Link>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="rounded-xl px-3 py-1 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Đăng xuất
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
+              >
+                {user.firstName} {user.lastName}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-xl border">
+                  <Link
+                    href="/order-history"
+                    className="block px-4 py-2 hover:bg-gray-100 text-sm"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    📦 Lịch sử đơn hàng
+                  </Link>
+
+                  <Link
+                    href="/profile"
+                    className="block px-4 py-2 hover:bg-gray-100 text-sm"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    👤 Tài khoản của tôi
+                  </Link>
+
+                  <button
+                    onClick={handleLogout}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-red-600"
+                  >
+                    🚪 Đăng xuất
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
-          <Link
-            href="/cart"
-            className="relative rounded-xl p-2 hover:bg-gray-100"
-          >
-            <ShoppingCart className="h-5 w-5" />
+          {/* Cart */}
+          <Link href="/cart" className="relative p-2 rounded-xl hover:bg-gray-100 transition">
+            <ShoppingCart className="h-5 w-5 text-gray-800" />
             {totalQty > 0 && (
-              <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
+              <span className="absolute -right-1 -top-1 h-5 min-w-5 flex items-center justify-center rounded-full bg-black text-white text-[10px] font-semibold px-1">
                 {totalQty}
               </span>
             )}
           </Link>
+
+          <button className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition">
+            <Menu className="h-6 w-6" />
+          </button>
         </div>
       </Container>
     </header>
