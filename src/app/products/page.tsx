@@ -1,39 +1,40 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import Container from "@/components/Container"
-import ProductCard from "@/components/ProductCard"
-import { ChevronDown, Filter, ShoppingCart } from "lucide-react"
-import { useCart } from "@/store/cart"   // ✅ dùng store giỏ hàng
+import { useEffect, useMemo, useState } from "react";
+import Container from "@/components/Container";
+import ProductCard from "@/components/ProductCard";
+import { ChevronDown, Filter } from "lucide-react";
+import { useCart } from "@/store/cart";
+import { useRouter } from "next/navigation";
 
 // ===== Kiểu dữ liệu từ BE =====
-type ApiBrand = { _id: string; TenTH: string }
-type ApiCategory = { _id: string; TenLoai: string }
+type ApiBrand = { _id: string; TenTH: string };
+type ApiCategory = { _id: string; TenLoai: string };
 type ApiProduct = {
-  [x: string]: any
-  _id: string
-  TenDH: string
-  Gia: number
-  SoLuong: number
-  ThuongHieu: ApiBrand | string
-  MaLoai: ApiCategory | string
-  images?: string[]
-}
-type ApiCategoryItem = { _id: string; TenLoai: string }
+  [x: string]: any;
+  _id: string;
+  TenDH: string;
+  Gia: number;
+  SoLuong: number;
+  ThuongHieu: ApiBrand | string;
+  MaLoai: ApiCategory | string;
+  images?: string[];
+};
+type ApiCategoryItem = { _id: string; TenLoai: string };
 
 // ===== Kiểu dữ liệu dùng cho ProductCard =====
 export type UiProduct = {
-  _id: string
-  slug: string
-  name: string
-  price: number
-  quantity: number
-  brand?: string
-  category?: string
-  image?: string
-  raw: ApiProduct
-}
+  _id: string;
+  slug: string;
+  name: string;
+  price: number;
+  quantity: number;
+  brand?: string;
+  category?: string;
+  image?: string;
+  raw: ApiProduct;
+};
 
 const PRICE_RANGES = [
   { id: "all", label: "Tất cả giá", min: 0, max: Number.POSITIVE_INFINITY },
@@ -41,9 +42,9 @@ const PRICE_RANGES = [
   { id: "500k-1m", label: "500K - 1M", min: 500_000, max: 1_000_000 },
   { id: "1m-2m", label: "1M - 2M", min: 1_000_000, max: 2_000_000 },
   { id: "over-2m", label: "Trên 2M", min: 2_000_000, max: Number.POSITIVE_INFINITY },
-]
+];
 
-const ITEMS_PER_PAGE = 8
+const ITEMS_PER_PAGE = 8;
 
 // ===== Helpers =====
 function slugify(input: string) {
@@ -52,13 +53,13 @@ function slugify(input: string) {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
+    .replace(/(^-|-$)/g, "");
 }
 
 function adaptProduct(p: ApiProduct): UiProduct {
-  const brand = typeof p.ThuongHieu === "string" ? undefined : p.ThuongHieu?.TenTH
-  const category = typeof p.MaLoai === "string" ? undefined : p.MaLoai?.TenLoai
-  const slug = `${slugify(p.TenDH)}-${p._id.slice(-6)}`
+  const brand = typeof p.ThuongHieu === "string" ? undefined : p.ThuongHieu?.TenTH;
+  const category = typeof p.MaLoai === "string" ? undefined : p.MaLoai?.TenLoai;
+  const slug = `${slugify(p.TenDH)}-${p._id.slice(-6)}`;
   return {
     _id: p._id,
     slug,
@@ -69,154 +70,248 @@ function adaptProduct(p: ApiProduct): UiProduct {
     category,
     image: p.images?.[0],
     raw: p,
-  }
+  };
 }
+
+// ====== BASE URL dùng chung cho wishlist & products ======
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || "http://localhost:5000";
 
 // ======= Fallback fetch với nhiều endpoint + timeout =======
 async function tryFetchJson(urls: string[]) {
-  const errors: string[] = []
+  const errors: string[] = [];
 
   for (const url of urls) {
     try {
-      const controller = new AbortController()
-      const to = setTimeout(() => controller.abort(), 3000)
+      const controller = new AbortController();
+      const to = setTimeout(() => controller.abort(), 3000);
 
       const res = await fetch(url, {
         cache: "no-store",
         credentials: "include",
         signal: controller.signal,
-      })
-      clearTimeout(to)
+      });
+      clearTimeout(to);
 
       if (!res.ok) {
-        errors.push(`${url} → HTTP ${res.status}`)
-        continue
+        errors.push(`${url} → HTTP ${res.status}`);
+        continue;
       }
-      return await res.json()
+      return await res.json();
     } catch (e: any) {
-      errors.push(`${url} → ${e?.name || "Error"}: ${e?.message || e}`)
+      errors.push(`${url} → ${e?.name || "Error"}: ${e?.message || e}`);
     }
   }
 
   throw new Error(
-    `Không gọi được API sau khi thử nhiều endpoint:\n` + errors.map((s) => "- " + s).join("\n")
-  )
+    `Không gọi được API sau khi thử nhiều endpoint:\n` +
+      errors.map((s) => "- " + s).join("\n")
+  );
+}
+
+// 🔑 Lấy token (support cả cookie & localStorage)
+function getAuthToken() {
+  if (typeof window === "undefined") return null;
+
+  // ưu tiên cookie httpOnly tên "token"
+  const m = document.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+  if (m) return decodeURIComponent(m[1]);
+
+  // fallback: localStorage (nếu login cũ còn dùng)
+  const ls = localStorage.getItem("token");
+  return ls || null;
 }
 
 export default function ProductsPage() {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [allProducts, setAllProducts] = useState<UiProduct[]>([])
-  const [allCategories, setAllCategories] = useState<ApiCategoryItem[]>([])
+  const router = useRouter();
 
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [selectedPriceRange, setSelectedPriceRange] = useState("all")
-  const [sortBy, setSortBy] = useState("popular")
-  const [currentPage, setCurrentPage] = useState(1)
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [allProducts, setAllProducts] = useState<UiProduct[]>([]);
+  const [allCategories, setAllCategories] = useState<ApiCategoryItem[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
 
-  // ✅ lấy addItem từ store (đây là hàm thật)
-  const addItem = useCart((s) => s.addItem)
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedPriceRange, setSelectedPriceRange] = useState("all");
+  const [sortBy, setSortBy] = useState("popular");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const addItem = useCart((s) => s.addItem);
 
   // ===== Xây danh sách endpoint thử lần lượt =====
   const candidates = (() => {
-    const baseFromEnv = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "")
-    const list = new Set<string>()
+    const baseFromEnv = API_BASE.replace(/\/+$/, "");
+    const list = new Set<string>();
 
     if (baseFromEnv) {
-      list.add(`${baseFromEnv}/products`)
-      list.add(`${baseFromEnv}/categories`)
+      list.add(`${baseFromEnv}/products`);
+      list.add(`${baseFromEnv}/categories`);
     }
 
     if (typeof window !== "undefined") {
-      const origin = window.location.origin // http://localhost:3000
-      const guess5000 = origin.replace(":3000", ":5000")
-      list.add(`${guess5000}/products`)
-      list.add(`${guess5000}/categories`)
+      const origin = window.location.origin; // http://localhost:3000
+      const guess5000 = origin.replace(":3000", ":5000");
+      list.add(`${guess5000}/products`);
+      list.add(`${guess5000}/categories`);
     }
 
-    list.add(`http://localhost:5000/products`)
-    list.add(`http://localhost:5000/categories`)
+    list.add(`http://localhost:5000/products`);
+    list.add(`http://localhost:5000/categories`);
 
-    list.add(`/api/products`)
-    list.add(`/api/categories`)
+    list.add(`/api/products`);
+    list.add(`/api/categories`);
 
-    const arr = Array.from(list)
-    const products = arr.filter((u) => /\/products$/.test(u))
-    const categories = arr.filter((u) => /\/categories$/.test(u))
-    return { products, categories }
-  })()
+    const arr = Array.from(list);
+    const products = arr.filter((u) => /\/products$/.test(u));
+    const categories = arr.filter((u) => /\/categories$/.test(u));
+    return { products, categories };
+  })();
 
   // ===== Fetch danh mục + sản phẩm từ BE =====
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        setLoading(true)
-        setError(null)
+        setLoading(true);
+        setError(null);
 
         const [jsonProducts, jsonCategories] = await Promise.all([
           tryFetchJson(candidates.products),
           tryFetchJson(candidates.categories),
-        ])
+        ]);
 
         if (!jsonProducts?.success || !Array.isArray(jsonProducts?.data))
-          throw new Error("Payload sản phẩm không hợp lệ")
+          throw new Error("Payload sản phẩm không hợp lệ");
 
         if (!jsonCategories?.success || !Array.isArray(jsonCategories?.data))
-          throw new Error("Payload danh mục không hợp lệ")
+          throw new Error("Payload danh mục không hợp lệ");
 
-        setAllProducts(jsonProducts.data.map((p: ApiProduct) => adaptProduct(p)))
-        setAllCategories(jsonCategories.data)
+        setAllProducts(jsonProducts.data.map((p: ApiProduct) => adaptProduct(p)));
+        setAllCategories(jsonCategories.data);
       } catch (e: any) {
-        console.error("Fetch error detail:", e?.message || e)
-        setError(e?.message || "Failed to fetch")
+        console.error("Fetch error detail:", e?.message || e);
+        setError(e?.message || "Failed to fetch");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchAll()
+    };
+    fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
+
+  // ⭐ B1: load wishlist ban đầu từ backend
+  useEffect(() => {
+    const loadWishlist = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) {
+          // chưa đăng nhập thì thôi, để wishlist rỗng
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/api/wishlist`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`, // nếu middleware đọc header
+          },
+        });
+
+        const json = await res.json();
+        if (res.ok && json.success && Array.isArray(json.data)) {
+          setWishlistIds(json.data.map((id: any) => String(id)));
+        } else {
+          console.warn("Load wishlist fail:", json);
+        }
+      } catch (err) {
+        console.error("Error load wishlist:", err);
+      }
+    };
+
+    loadWishlist();
+  }, []);
+
+  // ⭐ B2: hàm toggle gọi API /api/wishlist/toggle
+  const handleToggleWishlist = async (productId: string) => {
+    const token = getAuthToken();
+    if (!token) {
+      alert("Vui lòng đăng nhập trước khi dùng chức năng yêu thích.");
+      router.push("/auth");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/wishlist/toggle`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        console.error("Toggle wishlist lỗi:", json);
+        alert(json.message || "Không thể cập nhật danh sách yêu thích");
+        return;
+      }
+
+      // Backend trả về mảng wishlist mới → cập nhật state
+      if (Array.isArray(json.wishlist)) {
+        setWishlistIds(json.wishlist.map((id: any) => String(id)));
+      } else {
+        // fallback: tự toggle local nếu backend không trả mảng
+        setWishlistIds((prev) =>
+          prev.includes(productId)
+            ? prev.filter((id) => id !== productId)
+            : [...prev, productId]
+        );
+      }
+    } catch (err) {
+      console.error("Toggle wishlist error:", err);
+      alert("Lỗi kết nối server khi cập nhật yêu thích.");
+    }
+  };
 
   // ===== Lọc / sắp xếp =====
   const filteredProducts = useMemo(() => {
-    let list = [...allProducts]
+    let list = [...allProducts];
 
-    // 🔥 1) ẨN SẢN PHẨM BỊ ADMIN ẨN
-    list = list.filter((p) => !p.raw?.isHidden)
+    // Ẩn sản phẩm & danh mục bị khóa
+    list = list.filter((p) => !p.raw?.isHidden);
 
-    // 🔥 2) ẨN TẤT CẢ SẢN PHẨM THUỘC DANH MỤC BỊ ẨN
     const hiddenCats = allCategories
       .filter((c: any) => c.isHidden)
-      .map((c: any) => c.TenLoai)
+      .map((c: any) => c.TenLoai);
 
-    list = list.filter((p) => !hiddenCats.includes(p.category || ""))
+    list = list.filter((p) => !hiddenCats.includes(p.category || ""));
 
-    // === GIỮ NGUYÊN LOGIC GỐC CỦA ANH ===
-
-    // Lọc theo danh mục đang chọn
+    // Lọc theo danh mục
     if (selectedCategory !== "all") {
-      list = list.filter((p) => p.category === selectedCategory)
+      list = list.filter((p) => p.category === selectedCategory);
     }
 
     // Lọc theo giá
-    const price = PRICE_RANGES.find((r) => r.id === selectedPriceRange)
+    const price = PRICE_RANGES.find((r) => r.id === selectedPriceRange);
     if (price) {
-      list = list.filter((p) => p.price >= price.min && p.price <= price.max)
+      list = list.filter((p) => p.price >= price.min && p.price <= price.max);
     }
 
     // Sort theo giá
     if (sortBy === "price-low") {
-      list.sort((a, b) => a.price - b.price)
+      list.sort((a, b) => a.price - b.price);
     } else if (sortBy === "price-high") {
-      list.sort((a, b) => b.price - a.price)
+      list.sort((a, b) => b.price - a.price);
     }
 
-    return list
-  }, [allProducts, allCategories, selectedCategory, selectedPriceRange, sortBy])
+    return list;
+  }, [allProducts, allCategories, selectedCategory, selectedPriceRange, sortBy]);
 
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
-  const start = (currentPage - 1) * ITEMS_PER_PAGE
-  const paginated = filteredProducts.slice(start, start + ITEMS_PER_PAGE)
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const start = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginated = filteredProducts.slice(start, start + ITEMS_PER_PAGE);
 
   return (
     <Container className="py-8">
@@ -224,7 +319,7 @@ export default function ProductsPage() {
         {/* Sidebar: Danh mục + Lọc giá */}
         <aside className="w-full lg:w-64 flex-shrink-0">
           <div className="sticky top-20 space-y-6">
-            {/* Danh mục từ BE */}
+            {/* Danh mục */}
             <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 p-5 border border-blue-100">
               <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-900">
                 <Filter className="h-5 w-5 text-blue-600" /> Danh mục
@@ -234,7 +329,10 @@ export default function ProductsPage() {
                   <input
                     type="radio"
                     checked={selectedCategory === "all"}
-                    onChange={() => { setSelectedCategory("all"); setCurrentPage(1) }}
+                    onChange={() => {
+                      setSelectedCategory("all");
+                      setCurrentPage(1);
+                    }}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="text-sm font-medium text-gray-700">Tất cả sản phẩm</span>
@@ -246,7 +344,10 @@ export default function ProductsPage() {
                       type="radio"
                       name="category"
                       checked={selectedCategory === cat.TenLoai}
-                      onChange={() => { setSelectedCategory(cat.TenLoai); setCurrentPage(1) }}
+                      onChange={() => {
+                        setSelectedCategory(cat.TenLoai);
+                        setCurrentPage(1);
+                      }}
                       className="w-4 h-4 text-blue-600"
                     />
                     <span className="text-sm font-medium text-gray-700">{cat.TenLoai}</span>
@@ -267,7 +368,10 @@ export default function ProductsPage() {
                       type="radio"
                       name="price"
                       checked={selectedPriceRange === r.id}
-                      onChange={() => { setSelectedPriceRange(r.id); setCurrentPage(1) }}
+                      onChange={() => {
+                        setSelectedPriceRange(r.id);
+                        setCurrentPage(1);
+                      }}
                       className="w-4 h-4 text-purple-600"
                     />
                     <span className="text-sm font-medium text-gray-700">{r.label}</span>
@@ -308,26 +412,11 @@ export default function ProductsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {paginated.map((p) => (
                 <div key={p._id} className="group">
-                  <ProductCard product={p as any} />
-                  {/* <button
-                    className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white py-2.5 text-sm font-semibold hover:bg-blue-700 transition"
-                    onClick={() =>
-                      addItem(
-                        {
-                          id: p._id,
-                          name: p.name,
-                          price: p.price,
-                          image: p.image,
-                          brand: p.brand,
-                          category: p.category,
-                        },
-                        1
-                      )
-                    }
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                    Thêm vào giỏ
-                  </button> */}
+                  <ProductCard
+                    product={p as any}
+                    inWishlist={wishlistIds.includes(p._id)}
+                    onToggleWishlist={() => handleToggleWishlist(p._id)}
+                  />
                 </div>
               ))}
             </div>
@@ -342,10 +431,11 @@ export default function ProductsPage() {
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${currentPage === page
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                    currentPage === page
                       ? "bg-blue-600 text-white shadow"
                       : "border border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
+                  }`}
                 >
                   {page}
                 </button>
@@ -355,5 +445,5 @@ export default function ProductsPage() {
         </div>
       </div>
     </Container>
-  )
+  );
 }
