@@ -81,6 +81,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Users className="h-4 w-4" />
             Quản lý đơn hàng
           </Link>
+
+          <Link href="/admin/news" className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-800 transition">
+            <Users className="h-4 w-4" />
+            Quản lý tin tức
+          </Link>
         </nav>
 
         <button

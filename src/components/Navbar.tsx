@@ -61,7 +61,7 @@ export default function Navbar() {
 
           <nav className="hidden md:flex items-center gap-6 text-[15px] font-medium text-gray-700">
             <Link className="hover:text-black transition" href="/products">Sản phẩm</Link>
-            <Link className="hover:text-black transition" href="/new">Tin Tức</Link>
+            <Link className="hover:text-black transition" href="/news">Tin Tức</Link>
             <Link className="hover:text-black transition" href="/about">Giới Thiệu</Link>
 
             {user?.role === "admin" && (
