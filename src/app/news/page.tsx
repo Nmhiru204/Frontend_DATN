@@ -2,18 +2,63 @@
 import Image from "next/image";
 import Container from "@/components/Container";
 
+// ===============================
+// FIX BASE URL (chạy local = http)
+// ===============================
+function getBaseUrl() {
+  const url = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+
+  // Nếu đang chạy local → luôn dùng HTTP
+  if (typeof window === "undefined") {
+    // Server Component
+    return url.replace("https://", "http://");
+  }
+
+  if (window.location.hostname === "localhost") {
+    return url.replace("https://", "http://");
+  }
+
+  return url;
+}
+
 function getImageUrl(path: string) {
   if (!path) return "/placeholder.webp";
   if (path.startsWith("http")) return path;
-  return `http://localhost:5000${path}`;
+
+  return `${getBaseUrl()}${path}`;
 }
 
 export default async function NewsPage() {
-  const res = await fetch("http://localhost:5000/api/news/published", {
-    cache: "no-store",
-  });
+  const API = `${getBaseUrl()}/api/news/published`;
 
-  const posts = await res.json();
+  let posts: any[] = [];
+
+  try {
+    const res = await fetch(API, {
+      cache: "no-store",
+      // QUAN TRỌNG: tránh strict SSL
+      next: { revalidate: 0 },
+    });
+
+    if (!res.ok) {
+      console.error("❌ API ERROR:", res.status, API);
+      return (
+        <Container className="text-center py-20 text-red-600">
+          Lỗi API ({res.status}) — không tải được tin tức.
+        </Container>
+      );
+    }
+
+    posts = await res.json();
+  } catch (err) {
+    console.error("❌ FETCH FAILED:", err);
+    return (
+      <Container className="text-center py-20 text-red-600">
+        Không thể kết nối API tin tức.<br />
+        Hãy kiểm tra BACKEND có chạy không.
+      </Container>
+    );
+  }
 
   return (
     <Container className="py-10">
@@ -60,7 +105,7 @@ export default async function NewsPage() {
             </article>
           ))}
 
-          {/* ================= FEATURED POSTS ================= */}
+          {/* ================= FEATURED ================= */}
           <div className="grid gap-6 lg:grid-cols-2">
             {posts.slice(0, 2).map((p: any) => (
               <article key={p._id} className="card overflow-hidden">
@@ -109,7 +154,6 @@ export default async function NewsPage() {
             </ul>
           </div>
 
-          {/* Banner quảng cáo */}
           <div className="card overflow-hidden">
             <Image
               src="/img/1.webp"

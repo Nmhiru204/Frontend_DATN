@@ -1,28 +1,55 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+
 import Image from "next/image";
 import Container from "@/components/Container";
 import AddToCartButton from "./AddToCartButton";
 import { notFound } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/* ===============================
+    FIX API BASE KHÔNG ĐỔI UI
+=============================== */
+function getApiBase() {
+  const raw =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "https://api.magicwatchesstore.io.vn";
+
+  // Khi chạy localhost → API luôn là http để tránh SSL lỗi
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    return raw.replace("https://", "http://");
+  }
+
+  return raw; // VPS dùng HTTPS bình thường
+}
+
 export default function ProductDetail({ params }: { params: { id: string } }) {
   const [product, setProduct] = useState<any>(null);
   const [related, setRelated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
-
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${base}/products/${params.id}`, { cache: "no-store" });
-        if (!res.ok) return notFound();
+        const base = getApiBase();
+
+        // ==========================
+        // LẤY CHI TIẾT SẢN PHẨM
+        // ==========================
+        const res = await fetch(`${base}/products/${params.id}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          console.error("❌ API lỗi:", res.status, `${base}/products/${params.id}`);
+          return notFound();
+        }
 
         const json = await res.json();
         if (!json?.success || !json?.data) return notFound();
 
         const p = json.data;
+
         const prod = {
           id: p._id,
           name: p.TenDH,
@@ -32,29 +59,47 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
           category: typeof p.MaLoai === "object" ? p.MaLoai?.TenLoai : "",
           qty: 1,
         };
+
         setProduct(prod);
 
-        // Lấy sản phẩm liên quan theo danh mục
-        const rel = await fetch(`${base}/products`);
+        // ==========================
+        // LẤY SẢN PHẨM LIÊN QUAN
+        // ==========================
+        const rel = await fetch(`${base}/products`, { cache: "no-store" });
         const relJson = await rel.json();
+
         if (relJson?.success && Array.isArray(relJson.data)) {
-          const filtered = relJson.data
-            .filter((x: any) => x._id !== p._id && x.MaLoai?._id === p.MaLoai?._id)
+          const sameCategory = relJson.data
+            .filter(
+              (x: any) =>
+                x._id !== p._id && x.MaLoai?._id === p.MaLoai?._id
+            )
             .slice(0, 4);
-          setRelated(filtered);
+
+          setRelated(sameCategory);
         }
       } catch (err) {
-        console.error("Lỗi fetch chi tiết:", err);
+        console.error("❌ Lỗi fetch chi tiết:", err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, [params.id]);
 
-  if (loading) return <div className="text-center py-20 text-gray-500">Đang tải sản phẩm...</div>;
+  if (loading)
+    return (
+      <div className="text-center py-20 text-gray-500">
+        Đang tải sản phẩm...
+      </div>
+    );
+
   if (!product) return notFound();
 
+  /* ===============================
+      GIỮ NGUYÊN UI 100% NHƯ BẠN
+  =============================== */
   return (
     <Container className="py-12 bg-white">
       {/* Chi tiết sản phẩm */}
@@ -71,23 +116,29 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-
         {/* Thông tin */}
         <div className="space-y-5">
           <div className="text-sm text-gray-500">
-            Trang chủ / Nam / <span className="text-gray-700">{product.name}</span>
+            Trang chủ / Nam /{" "}
+            <span className="text-gray-700">{product.name}</span>
           </div>
 
-          <h1 className="text-2xl font-semibold text-gray-900">{product.name}</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {product.name}
+          </h1>
 
           {product.brand && (
             <p className="text-gray-700">
-              Thương hiệu: <span className="font-medium">{product.brand}</span>
+              Thương hiệu:{" "}
+              <span className="font-medium">{product.brand}</span>
             </p>
           )}
 
           <p className="text-sm text-gray-600">
-            Mã: <span className="text-gray-800 font-semibold">ORIENT-BAMBINO</span>
+            Mã:{" "}
+            <span className="text-gray-800 font-semibold">
+              ORIENT-BAMBINO
+            </span>
           </p>
 
           <p className="text-3xl font-bold text-orange-600">
@@ -102,7 +153,8 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
           </ul>
 
           <p className="text-gray-600 text-sm leading-relaxed pt-2">
-            Mẫu đồng hồ đa dụng với thiết kế cổ điển, độ bền cao và nhiều tính năng tiện ích cho sử dụng hằng ngày.
+            Mẫu đồng hồ đa dụng với thiết kế cổ điển, độ bền cao và nhiều tính
+            năng tiện ích cho sử dụng hằng ngày.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-3">
@@ -127,7 +179,6 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
                 key={item._id}
                 className="group border border-gray-200 rounded-lg shadow-sm hover:shadow-md bg-white transition overflow-hidden relative"
               >
-                {/* Ảnh */}
                 <div className="aspect-square relative bg-gray-50 overflow-hidden">
                   <Image
                     src={item.images?.[0] ?? "/img/placeholder.webp"}
@@ -136,16 +187,14 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
 
-                  {/* Nút Thêm giỏ hàng (hover mới hiện) */}
                   <button
                     className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    onClick={() => console.log('Thêm vào giỏ:', item.TenDH)}
+                    onClick={() => console.log("Thêm vào giỏ:", item.TenDH)}
                   >
                     <AddToCartButton item={product} />
                   </button>
                 </div>
 
-                {/* Thông tin */}
                 <div className="p-3 space-y-2">
                   <p className="text-sm font-medium text-gray-800 line-clamp-2">
                     {item.TenDH}
@@ -154,9 +203,10 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
                     {item.Gia?.toLocaleString("vi-VN")}đ
                   </p>
 
-                  {/* Nút xem sản phẩm (luôn hiển thị) */}
                   <button
-                    onClick={() => (window.location.href = `/product/${item._id}`)}
+                    onClick={() =>
+                      (window.location.href = `/product/${item._id}`)
+                    }
                     className="w-full text-sm font-medium px-3 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition"
                   >
                     👁 Xem sản phẩm
@@ -167,7 +217,6 @@ export default function ProductDetail({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
-
     </Container>
   );
 }

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Container from "@/components/Container";
 import ProductCard from "@/components/ProductCard";
 
-// ===== types khớp BE của bạn =====
+// ===== types =====
 type ApiBrand = { _id: string; TenTH: string; Logo?: string };
 type ApiCategory = { _id: string; TenLoai: string };
 type ApiProduct = {
@@ -17,11 +17,18 @@ type ApiProduct = {
   images?: string[];
 };
 
-// ===== helpers =====
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
-  "http://localhost:5000";
+// ===== Detect API BASE =====
+const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.magicwatchesstore.io.vn";
 
+// Local Next.js fetch không chạy HTTPS → bắt buộc đổi sang HTTP
+const API_BASE =
+  process.env.NODE_ENV === "development"
+    ? RAW_BASE.replace("https://", "http://")
+    : RAW_BASE;
+
+console.log("🔗 API_BASE ĐANG DÙNG:", API_BASE);
+
+// ===== Helpers =====
 function slugify(input: string) {
   return input
     .normalize("NFD")
@@ -35,6 +42,7 @@ function adaptProduct(p: ApiProduct) {
   const brand = typeof p.ThuongHieu === "string" ? undefined : p.ThuongHieu?.TenTH;
   const category = typeof p.MaLoai === "string" ? undefined : p.MaLoai?.TenLoai;
   const slug = `${slugify(p.TenDH)}-${p._id.slice(-6)}`;
+
   return {
     _id: p._id,
     slug,
@@ -50,35 +58,45 @@ function adaptProduct(p: ApiProduct) {
 
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j?.data ?? null;
-  } catch {
+    const res = await fetch(url, { cache: "no-store" });
+
+    if (!res.ok) {
+      console.log("❌ HTTP Error:", res.status, url);
+      return null;
+    }
+
+    const json = await res.json();
+
+    if (json?.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+
+    console.log("⚠️ Sai format API:", json);
+    return null;
+  } catch (err) {
+    console.log("❌ FETCH ERROR:", err);
     return null;
   }
 }
 
+// ===== Lấy dữ liệu trang chủ =====
 async function getHomeData() {
   const [products, brands] = await Promise.all([
     fetchJson<ApiProduct[]>(`${API_BASE}/products`),
     fetchJson<ApiBrand[]>(`${API_BASE}/brands`),
   ]);
 
-  // fallback mảng rỗng nếu BE chưa có
-  const list = Array.isArray(products) ? products : [];
-  const brandList = Array.isArray(brands) ? brands : [];
+  const list = products ?? [];
+  const brandList = brands ?? [];
 
-  // chọn 8 sản phẩm đầu làm “bán chạy”, 6 tiếp theo làm “nổi bật”
   const bestSellers = list.slice(0, 8).map(adaptProduct);
   const featured = list.slice(8, 14).map(adaptProduct);
-
-  // lấy 3 brand đầu (nếu muốn khác, thay .slice(0, 3))
   const topBrands = brandList.slice(0, 5);
 
   return { bestSellers, featured, topBrands };
 }
 
+// ===== PAGE =====
 export default async function HomePage() {
   const { bestSellers, featured, topBrands } = await getHomeData();
 
@@ -111,7 +129,7 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* Best sellers (động) */}
+      {/* Best sellers */}
       <section id="banchay" className="mt-10">
         <Container>
           <div className="mb-4 flex items-center justify-between">
@@ -127,7 +145,6 @@ export default async function HomePage() {
                 <ProductCard key={p._id} product={p as any} />
               ))}
             </div>
-
           ) : (
             <div className="card p-6 text-center text-gray-500">
               Chưa có sản phẩm — vui lòng thêm vào MongoDB.
@@ -136,7 +153,7 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* Banner giữa trang */}
+      {/* Banner */}
       <section className="mt-16 bg-gradient-to-r from-yellow-50 to-orange-100">
         <Container className="py-10 text-center">
           <h2 className="mb-3 text-2xl font-bold text-gray-800">
@@ -149,7 +166,7 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* Featured (động) */}
+      {/* Featured */}
       <section id="noibat" className="mt-16">
         <Container>
           <div className="mb-4 flex items-center justify-between">
@@ -173,7 +190,7 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* Brands (động từ BE) */}
+      {/* Brands */}
       <section className="mt-14 mb-20">
         <Container>
           <div className="mb-4 text-center text-lg font-semibold">
@@ -192,10 +209,14 @@ export default async function HomePage() {
                     {b.Logo ? (
                       <Image src={b.Logo} alt={b.TenTH} fill className="object-contain p-2" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-500">No Logo</div>
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-500">
+                        No Logo
+                      </div>
                     )}
                   </div>
-                  <div className="text-sm font-semibold group-hover:underline">{b.TenTH}</div>
+                  <div className="text-sm font-semibold group-hover:underline">
+                    {b.TenTH}
+                  </div>
                 </a>
               ))}
             </div>
