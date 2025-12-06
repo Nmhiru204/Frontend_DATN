@@ -1,22 +1,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Container from "@/components/Container";
 import Image from "next/image";
-import { notFound } from "next/navigation";
 
-export default async function NewsDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+interface NewsDetailProps {
+  params: {
+    id: string;
+  };
+}
+
+export default async function NewsDetailPage({ params }: NewsDetailProps) {
   const { id } = params;
 
-  // Gọi API backend lấy bài viết theo ID
+  // Gọi API backend để lấy bài viết theo ID
   const res = await fetch(`http://localhost:5000/api/news/${id}`, {
     cache: "no-store",
   });
 
-  // Nếu không tìm thấy → dùng notFound() chuẩn Next.js
-  if (!res.ok) return notFound();
+  if (!res.ok) {
+    return (
+      <Container className="py-20 text-center">
+        <h2 className="text-xl font-bold text-red-500">Không tìm thấy bài viết</h2>
+      </Container>
+    );
+  }
 
   const post = await res.json();
 
@@ -41,6 +47,7 @@ export default async function NewsDetailPage({
       </div>
 
       <article className="prose prose-lg max-w-none">
+        {/* post.content của backend đang là dạng văn bản HTML đơn giản */}
         <div dangerouslySetInnerHTML={{ __html: post.content }} />
       </article>
     </Container>
